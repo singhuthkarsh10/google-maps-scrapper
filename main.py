@@ -51,7 +51,6 @@ def extract_coordinates_from_url(url: str) -> tuple[float, float]:
     coordinates = url.split('/@')[-1].split('/')[0]
     return float(coordinates.split(',')[0]), float(coordinates.split(',')[1])
 
-
 def main():
     # Define the array of pincodes to search for gated communities
     pincodes = ['600119', '600130', '600100', '600096', '600131', '603112', '600129', '600115', '600113', '600102', '600097', '600091']
@@ -66,11 +65,13 @@ def main():
     all_communities_list = []  # This will store all the dataframes to concatenate later
 
     with sync_playwright() as p:
+        # Initialize the browser outside the loop
         browser = p.chromium.launch(headless=False)
         page = browser.new_page()
-
         page.goto("https://www.google.com/maps", timeout=60000)
         page.wait_for_timeout(5000)
+
+        pincode_counter = 0  # Counter to track the number of pincodes processed
 
         # Loop through each pincode
         for pincode in pincodes:
@@ -145,6 +146,18 @@ def main():
             # Store the dataframe in the list for later concatenation
             all_communities_list.append(community_list.dataframe())
 
+            # Increment the pincode counter
+            pincode_counter += 1
+
+            # Close and reopen the browser after every 10 pincodes
+            if pincode_counter >= 10:
+                browser.close()  # Close the current browser instance
+                browser = p.chromium.launch(headless=False)  # Reopen a new browser instance
+                page = browser.new_page()
+                page.goto("https://www.google.com/maps", timeout=60000)
+                page.wait_for_timeout(5000)
+                pincode_counter = 0  # Reset the counter
+
         # Combine all dataframes into a single dataframe and save as a single CSV file
         all_communities_df = pd.concat(all_communities_list, ignore_index=True)
         if not os.path.exists('output'):
@@ -152,7 +165,6 @@ def main():
         all_communities_df.to_csv('output/gated_communities_all.csv', index=False)
 
         browser.close()
-
 
 if __name__ == "__main__":
     main()
